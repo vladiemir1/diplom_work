@@ -13,6 +13,7 @@ from modules.openai_analyzer import (
     get_gigachat_access_token,
     is_gigachat_config,
     load_api_key,
+    _parse_json_response,
 )
 
 
@@ -131,3 +132,11 @@ def test_get_gigachat_access_token(monkeypatch: pytest.MonkeyPatch) -> None:
     assert token == "token-123"
     assert calls[0][1]["headers"]["Authorization"] == "Basic authorization-key"
     assert calls[0][1]["data"]["scope"] == "GIGACHAT_API_PERS"
+
+
+def test_parse_json_response_from_markdown_or_extra_text() -> None:
+    assert _parse_json_response('```json\n{"items": []}\n```') == {"items": []}
+    assert _parse_json_response('Ответ:\n{"reviews": []}\nготово') == {"reviews": []}
+    assert _parse_json_response('[{"review_id": "1", "results": []}]') == {
+        "items": [{"review_id": "1", "results": []}]
+    }

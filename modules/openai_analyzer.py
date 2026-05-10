@@ -266,6 +266,43 @@ def _extract_response_text(response: Any) -> str:
     raise AnalyzerError("OpenAI API вернул ответ без текстового содержимого.")
 
 
+def _parse_json_response(text: str) -> dict[str, Any]:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:].strip()
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        parsed = None
+
+    if parsed is None:
+        decoder = json.JSONDecoder()
+        candidates = [
+            index
+            for index, char in enumerate(cleaned)
+            if char in "{["
+        ]
+        for start in candidates:
+            try:
+                parsed, _ = decoder.raw_decode(cleaned[start:])
+                break
+            except json.JSONDecodeError:
+                continue
+
+    if parsed is None:
+        snippet = cleaned[:500].replace("\n", " ")
+        raise AnalyzerError(f"LLM API вернул некорректный JSON. Фрагмент ответа: {snippet}")
+
+    if isinstance(parsed, list):
+        return {"items": parsed}
+    if isinstance(parsed, dict):
+        return parsed
+    raise AnalyzerError("LLM API вернул JSON не в объектном формате.")
+
+
 def _completion_create(client: Any, **kwargs: Any) -> Any:
     return client.chat.completions.create(**kwargs)
 
@@ -336,10 +373,7 @@ def _call_openai_batch(
         except Exception as exc:
             raise AnalyzerError(f"LLM API недоступен или отклонил запрос: {exc}") from exc
 
-    try:
-        return json.loads(_extract_response_text(response))
-    except json.JSONDecodeError as exc:
-        raise AnalyzerError("LLM API вернул некорректный JSON.") from exc
+    return _parse_json_response(_extract_response_text(response))
 
 
 def _clamp_confidence(value: Any) -> float:
