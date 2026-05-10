@@ -261,12 +261,16 @@ def run_analysis(text_column: str) -> None:
 
 
 def render_analysis_controls(text_column: str | None) -> None:
+    if st.session_state.get("raw_df") is None:
+        return
+
     st.subheader("Запуск анализа")
-    left, right = st.columns([2, 1])
-    with left:
+    st.caption("После запуска приложение обработает валидные отзывы и построит таблицы с дашбордом.")
+
+    with st.expander("Расширенные настройки NLP-модуля", expanded=False):
         st.caption(
-            "Аналитический слой использует внешний NLP-модуль. "
-            "Поддерживаются OpenAI и OpenAI-compatible API: OpenRouter, DeepSeek, Groq, локальные шлюзы."
+            "Можно использовать OpenAI или OpenAI-compatible API. "
+            "Если поля оставить пустыми, настройки будут взяты из `.env`."
         )
         provider_cols = st.columns([1, 1])
         with provider_cols[0]:
@@ -292,7 +296,6 @@ def render_analysis_controls(text_column: str | None) -> None:
             placeholder="Можно оставить пустым, если ключ задан в .env",
             help="Если заполнено, используется только в текущей сессии Streamlit и не экспортируется.",
         )
-    with right:
         st.session_state["batch_size"] = st.number_input(
             "Размер батча",
             min_value=1,
