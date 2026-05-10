@@ -72,7 +72,7 @@ def inject_css() -> None:
                 linear-gradient(180deg, #f7f8fb 0%, var(--app-bg) 36%, #eef2f6 100%);
         }
         .main .block-container {
-            padding-top: 1.35rem;
+            padding-top: .65rem;
             padding-bottom: 3rem;
             max-width: 1200px;
         }
@@ -84,9 +84,9 @@ def inject_css() -> None:
                 linear-gradient(135deg, rgba(255,255,255,.98), rgba(244,247,252,.96));
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 28px 30px 24px 30px;
-            box-shadow: 0 18px 45px rgba(35, 50, 75, .08);
-            margin-bottom: 20px;
+            padding: 18px 24px 18px 24px;
+            box-shadow: 0 14px 32px rgba(35, 50, 75, .07);
+            margin-bottom: 16px;
             position: relative;
             overflow: hidden;
         }
@@ -95,7 +95,7 @@ def inject_css() -> None:
             position: absolute;
             top: 0;
             right: 0;
-            width: 38%;
+            width: 32%;
             height: 100%;
             background:
                 linear-gradient(90deg, transparent, rgba(19, 90, 188, .05)),
@@ -109,15 +109,15 @@ def inject_css() -> None:
         }
         .eyebrow {
             color: var(--accent);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             letter-spacing: .08em;
             text-transform: uppercase;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
         .hero h1 {
-            margin: 0 0 8px 0;
-            font-size: 36px;
+            margin: 0 0 6px 0;
+            font-size: 30px;
             line-height: 1.15;
             letter-spacing: 0;
             color: var(--text);
@@ -125,33 +125,33 @@ def inject_css() -> None:
         .hero p {
             margin: 0;
             color: #4d5870;
-            font-size: 16px;
-            max-width: 680px;
+            font-size: 14px;
+            max-width: 620px;
         }
         .hero-steps {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 18px;
+            gap: 7px;
+            margin-top: 13px;
         }
         .step-pill {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 11px;
+            padding: 6px 10px;
             border: 1px solid #d6deeb;
             background: rgba(255,255,255,.72);
             color: #33415c;
             border-radius: 999px;
-            font-size: 13px;
+            font-size: 12px;
             white-space: nowrap;
         }
         .step-index {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
@@ -159,7 +159,7 @@ def inject_css() -> None:
             font-weight: 700;
         }
         .section-head {
-            margin: 26px 0 12px 0;
+            margin: 18px 0 10px 0;
         }
         .section-kicker {
             color: var(--accent);
@@ -171,7 +171,7 @@ def inject_css() -> None:
         }
         .section-title {
             color: var(--text);
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 750;
             line-height: 1.2;
             margin: 0;
@@ -180,6 +180,67 @@ def inject_css() -> None:
             color: var(--muted);
             font-size: 14px;
             margin-top: 6px;
+        }
+        .preview-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+            gap: 16px;
+            align-items: start;
+            margin: 6px 0 18px 0;
+        }
+        .preview-panel {
+            background: rgba(255,255,255,.78);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 24px rgba(30, 45, 70, .045);
+        }
+        .preview-panel-title {
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .preview-panel-note {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.45;
+            margin-bottom: 12px;
+        }
+        .preview-metrics {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        .mini-metric {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        .mini-metric-label {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .mini-metric-value {
+            color: var(--text);
+            font-size: 20px;
+            font-weight: 750;
+        }
+        .table-spacer {
+            margin-top: 16px;
+        }
+        @media (max-width: 900px) {
+            .preview-grid {
+                grid-template-columns: 1fr;
+            }
+            .hero::after {
+                opacity: .35;
+            }
         }
         .empty-state {
             margin: 14px 0 8px 0;
@@ -287,6 +348,15 @@ def metric_card(label: str, value: object) -> None:
     )
 
 
+def mini_metric(label: str, value: object) -> str:
+    return f"""
+    <div class="mini-metric">
+        <div class="mini-metric-label">{label}</div>
+        <div class="mini-metric-value">{value}</div>
+    </div>
+    """
+
+
 def section_header(kicker: str, title: str, note: str | None = None) -> None:
     note_html = f'<div class="section-note">{note}</div>' if note else ""
     st.markdown(
@@ -340,26 +410,45 @@ def render_preview() -> str | None:
         "Предпросмотр",
         f"Источник: {st.session_state.get('source_name') or 'данные пользователя'}",
     )
-    cols = st.columns(3)
-    with cols[0]:
-        metric_card("Строк в таблице", len(raw_df))
-    with cols[1]:
-        metric_card("Столбцов", len(raw_df.columns))
-    with cols[2]:
-        metric_card("Есть review_text", "Да" if "review_text" in raw_df.columns else "Нет")
-
-    st.dataframe(raw_df.head(20), use_container_width=True)
-    st.markdown(
-        f'<div class="column-list"><strong>Найденные столбцы:</strong> {", ".join(map(str, raw_df.columns))}</div>',
-        unsafe_allow_html=True,
-    )
 
     text_columns = selectable_text_columns(raw_df)
     default_index = text_columns.index("review_text") if "review_text" in text_columns else 0
-    text_column = st.selectbox(
-        "Выберите столбец с текстом отзыва",
-        options=text_columns,
-        index=default_index,
+
+    left, right = st.columns([2.2, 1])
+    with left:
+        st.markdown(
+            """
+            <div class="preview-panel">
+                <div class="preview-panel-title">Настройка входной таблицы</div>
+                <div class="preview-panel-note">Проверьте найденные поля и выберите колонку, где хранится текст отзыва.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        text_column = st.selectbox(
+            "Столбец с текстом отзыва",
+            options=text_columns,
+            index=default_index,
+        )
+        st.markdown(
+            f'<div class="column-list"><strong>Найденные столбцы:</strong> {", ".join(map(str, raw_df.columns))}</div>',
+            unsafe_allow_html=True,
+        )
+    with right:
+        st.markdown(
+            '<div class="preview-metrics">'
+            + mini_metric("Строк", len(raw_df))
+            + mini_metric("Столбцов", len(raw_df.columns))
+            + mini_metric("review_text", "Да" if "review_text" in raw_df.columns else "Нет")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="table-spacer"></div>', unsafe_allow_html=True)
+    st.dataframe(
+        raw_df.head(20),
+        use_container_width=True,
+        height=420,
     )
 
     is_valid, errors = validate_reviews_df(raw_df, text_column=text_column)
