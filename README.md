@@ -69,15 +69,27 @@ streamlit run app.py
 
 Если `review_text` отсутствует, приложение предложит выбрать любой другой текстовый столбец.
 
-## Парсер Wildberries
+## Вспомогательный парсер Wildberries
 
-В разделе “Парсер Wildberries” вставьте ссылку на товар, например:
+Парсер не встроен в основной интерфейс приложения, чтобы MVP соответствовал ТЗ ВКР. Он доступен отдельным CLI-скриптом и создаёт CSV, который затем можно загрузить в приложение как обычный файл.
 
-```text
-https://www.wildberries.ru/catalog/5870243/detail.aspx
+Пример запуска:
+
+```bash
+python scripts/parse_wb_reviews.py "https://www.wildberries.ru/catalog/5870243/detail.aspx" --limit 100
 ```
 
-Приложение извлечет `nmId`, попробует получить публичные отзывы и сохранит CSV в папку `data/`.
+Можно передать и сам артикул:
+
+```text
+python scripts/parse_wb_reviews.py 5870243 --limit 50
+```
+
+Скрипт извлечёт `nmId`, попробует получить публичные отзывы и сохранит CSV в папку `data/`:
+
+```text
+data/wb_reviews_<nmId>.csv
+```
 
 Важно: парсер работает без WB API-ключа продавца и зависит от публичных endpoint Wildberries. Если Wildberries ограничит доступ или изменит формат ответа, приложение покажет понятную ошибку.
 
@@ -102,6 +114,7 @@ modules/aggregation.py          агрегаты
 modules/visualization.py        графики Plotly
 modules/export.py               CSV/XLSX экспорт
 modules/wb_parser.py            публичный парсер WB
+scripts/parse_wb_reviews.py     CLI-скрипт для сбора WB-отзывов в CSV
 data/sample_reviews.csv         пример входных данных
 docs/vkr_context_summary.md     краткий контекст ВКР
 tests/                          unit-тесты
