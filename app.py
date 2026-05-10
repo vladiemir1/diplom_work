@@ -18,10 +18,9 @@ from modules.export import to_csv_bytes, to_xlsx_bytes
 from modules.openai_analyzer import GIGACHAT_BASE_URL, AnalyzerConfig, AnalyzerError, analyze_reviews
 from modules.preprocessing import preprocess_reviews
 from modules.visualization import (
-    build_aspect_mentions_chart,
-    build_confidence_chart,
-    build_date_sentiment_chart,
-    build_sentiment_distribution_chart,
+    build_negative_rate_chart,
+    build_overall_sentiment_donut,
+    build_sentiment_share_chart,
 )
 
 
@@ -236,6 +235,102 @@ def inject_css() -> None:
             font-size: 28px;
             font-weight: 700;
         }
+        .sentiment-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin: 14px 0 4px 0;
+        }
+        .sentiment-mini {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            box-shadow: 0 8px 18px rgba(30, 45, 70, .04);
+        }
+        .sentiment-mini-label {
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .sentiment-mini-value {
+            color: var(--text);
+            font-size: 21px;
+            font-weight: 750;
+            margin-top: 3px;
+        }
+        .aspect-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin: 12px 0 22px 0;
+        }
+        .aspect-card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px 16px;
+            box-shadow: 0 10px 24px rgba(30, 45, 70, .05);
+        }
+        .aspect-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .aspect-name {
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 750;
+        }
+        .aspect-count {
+            color: var(--accent);
+            background: var(--accent-soft);
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 12px;
+            font-weight: 750;
+            white-space: nowrap;
+        }
+        .sentiment-bar {
+            display: flex;
+            height: 10px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #eef2f7;
+            margin-bottom: 12px;
+        }
+        .bar-positive { background: #2f9e44; }
+        .bar-negative { background: #e03131; }
+        .bar-neutral { background: #868e96; }
+        .aspect-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .aspect-stat-label {
+            color: var(--muted);
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+        .aspect-stat-value {
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 750;
+        }
+        .panel {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 14px 8px 14px;
+            box-shadow: 0 10px 24px rgba(30, 45, 70, .045);
+            margin-bottom: 14px;
+        }
+        @media (max-width: 900px) {
+            .aspect-grid, .sentiment-strip {
+                grid-template-columns: 1fr;
+            }
+        }
         .column-list {
             display: block;
             padding: 11px 13px;
@@ -297,6 +392,52 @@ def metric_card(label: str, value: object) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def sentiment_mini(label: str, count: int, share: float) -> str:
+    return (
+        '<div class="sentiment-mini">'
+        f'<div class="sentiment-mini-label">{label}</div>'
+        f'<div class="sentiment-mini-value">{count} / {share:.1f}%</div>'
+        "</div>"
+    )
+
+
+def render_aspect_cards(agg_df: pd.DataFrame) -> None:
+    if agg_df.empty:
+        st.info("Нет аспектных данных для отображения.")
+        return
+
+    cards = []
+    for _, row in agg_df.iterrows():
+        positive = float(row.get("positive_share", 0))
+        negative = float(row.get("negative_share", 0))
+        neutral = float(row.get("neutral_share", 0))
+        cards.append(
+            '<div class="aspect-card">'
+            '<div class="aspect-card-head">'
+            f'<div class="aspect-name">{row["aspect"]}</div>'
+            f'<div class="aspect-count">{int(row["mention_count"])} упомин.</div>'
+            "</div>"
+            '<div class="sentiment-bar">'
+            f'<div class="bar-positive" style="width:{positive}%"></div>'
+            f'<div class="bar-negative" style="width:{negative}%"></div>'
+            f'<div class="bar-neutral" style="width:{neutral}%"></div>'
+            "</div>"
+            '<div class="aspect-stats">'
+            "<div><div class=\"aspect-stat-label\">Позитив</div>"
+            f'<div class="aspect-stat-value">{positive:.1f}%</div></div>'
+            "<div><div class=\"aspect-stat-label\">Негатив</div>"
+            f'<div class="aspect-stat-value">{negative:.1f}%</div></div>'
+            "<div><div class=\"aspect-stat-label\">Нейтрально</div>"
+            f'<div class="aspect-stat-value">{neutral:.1f}%</div></div>'
+            "<div><div class=\"aspect-stat-label\">Уверенность</div>"
+            f'<div class="aspect-stat-value">{float(row["confidence_avg"]):.3f}</div></div>'
+            "</div>"
+            "</div>"
+        )
+
+    st.markdown('<div class="aspect-grid">' + "".join(cards) + "</div>", unsafe_allow_html=True)
 
 
 def section_header(kicker: str, title: str, note: str | None = None) -> None:
@@ -551,72 +692,128 @@ def render_results() -> None:
         "Сводные показатели, таблица аспектов, графики и экспорт в одном рабочем пространстве.",
     )
 
-    overview_tab, table_tab, dashboard_tab, export_tab = st.tabs(
-        ["Обзор", "Результаты по отзывам", "Дашборд", "Экспорт"]
+    invalid_count = 0
+    if processed_df is not None and "is_valid" in processed_df.columns:
+        invalid_count = int((~processed_df["is_valid"]).sum())
+    valid_count = len(processed_df) - invalid_count if processed_df is not None else 0
+    total_mentions = len(results_df)
+    negative_share = round(float((results_df["sentiment"] == "negative").mean() * 100), 1) if total_mentions else 0.0
+
+    cols = st.columns(4)
+    with cols[0]:
+        metric_card("Всего отзывов", len(raw_df) if raw_df is not None else 0)
+    with cols[1]:
+        metric_card("Валидных отзывов", valid_count)
+    with cols[2]:
+        metric_card("Аспектных упоминаний", total_mentions)
+    with cols[3]:
+        metric_card("Доля негатива", f"{negative_share}%")
+
+    sentiment_counts = results_df["sentiment_label"].fillna("Нейтральная").value_counts()
+    st.markdown(
+        '<div class="sentiment-strip">'
+        + sentiment_mini("Положительная", int(sentiment_counts.get("Положительная", 0)), float((results_df["sentiment"] == "positive").mean() * 100) if total_mentions else 0)
+        + sentiment_mini("Отрицательная", int(sentiment_counts.get("Отрицательная", 0)), float((results_df["sentiment"] == "negative").mean() * 100) if total_mentions else 0)
+        + sentiment_mini("Нейтральная", int(sentiment_counts.get("Нейтральная", 0)), float((results_df["sentiment"] == "neutral").mean() * 100) if total_mentions else 0)
+        + "</div>",
+        unsafe_allow_html=True,
     )
 
-    with overview_tab:
-        invalid_count = 0
-        if processed_df is not None and "is_valid" in processed_df.columns:
-            invalid_count = int((~processed_df["is_valid"]).sum())
-        negative_share = 0.0
-        if not results_df.empty:
-            negative_share = round(float((results_df["sentiment"] == "negative").mean() * 100), 1)
+    section_header("Аспекты", "Карточки аспектов", "Доли тональности считаются внутри каждого аспекта.")
+    render_aspect_cards(agg_df)
 
-        cols = st.columns(4)
-        with cols[0]:
-            metric_card("Всего отзывов", len(raw_df) if raw_df is not None else 0)
-        with cols[1]:
-            metric_card("Валидных отзывов", len(processed_df) - invalid_count if processed_df is not None else 0)
-        with cols[2]:
-            metric_card("Аспектных упоминаний", len(results_df))
-        with cols[3]:
-            metric_card("Доля негатива", f"{negative_share}%")
+    section_header("Аналитика", "Процентные графики", "Графики показывают не только объём, но и структуру тональности.")
+    chart_left, chart_right = st.columns([1.55, 1])
+    with chart_left:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        st.plotly_chart(build_sentiment_share_chart(agg_df), use_container_width=True, config={"displayModeBar": False})
+        st.markdown("</div>", unsafe_allow_html=True)
+    with chart_right:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        st.plotly_chart(build_overall_sentiment_donut(results_df), use_container_width=True, config={"displayModeBar": False})
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.plotly_chart(build_negative_rate_chart(agg_df), use_container_width=True, config={"displayModeBar": False})
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        st.dataframe(agg_df, use_container_width=True)
+    section_header("Сводка", "Таблица аспектов", "Проценты округлены до одного знака.")
+    summary_df = agg_df.rename(
+        columns={
+            "aspect": "Аспект",
+            "mention_count": "Упоминаний",
+            "positive_count": "Позитив",
+            "negative_count": "Негатив",
+            "neutral_count": "Нейтрально",
+            "positive_share": "Позитив, %",
+            "negative_share": "Негатив, %",
+            "neutral_share": "Нейтрально, %",
+            "confidence_avg": "Средняя уверенность",
+        }
+    )[
+        [
+            "Аспект",
+            "Упоминаний",
+            "Позитив, %",
+            "Негатив, %",
+            "Нейтрально, %",
+            "Средняя уверенность",
+        ]
+    ]
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-    with table_tab:
-        filtered = results_df.copy()
-        col1, col2 = st.columns(2)
-        with col1:
-            aspects = ["Все"] + sorted(filtered["aspect"].dropna().unique().tolist())
-            selected_aspect = st.selectbox("Аспект", aspects)
-        with col2:
-            sentiments = ["Все"] + sorted(filtered["sentiment_label"].dropna().unique().tolist())
-            selected_sentiment = st.selectbox("Тональность", sentiments)
+    section_header("Детализация", "Результаты по отзывам", "Используйте фильтры для проверки конкретных аспектов и тональности.")
+    filtered = results_df.copy()
+    col1, col2 = st.columns(2)
+    with col1:
+        aspects = ["Все"] + sorted(filtered["aspect"].dropna().unique().tolist())
+        selected_aspect = st.selectbox("Аспект", aspects)
+    with col2:
+        sentiments = ["Все"] + sorted(filtered["sentiment_label"].dropna().unique().tolist())
+        selected_sentiment = st.selectbox("Тональность", sentiments)
 
-        if selected_aspect != "Все":
-            filtered = filtered[filtered["aspect"] == selected_aspect]
-        if selected_sentiment != "Все":
-            filtered = filtered[filtered["sentiment_label"] == selected_sentiment]
+    if selected_aspect != "Все":
+        filtered = filtered[filtered["aspect"] == selected_aspect]
+    if selected_sentiment != "Все":
+        filtered = filtered[filtered["sentiment_label"] == selected_sentiment]
 
-        st.dataframe(filtered, use_container_width=True, hide_index=True)
+    display_df = filtered.rename(
+        columns={
+            "review_id": "ID отзыва",
+            "product_name": "Товар",
+            "rating": "Оценка",
+            "date": "Дата",
+            "review_text": "Текст отзыва",
+            "aspect": "Аспект",
+            "sentiment_label": "Тональность",
+            "confidence": "Уверенность",
+            "explanation": "Пояснение",
+        }
+    )
+    display_columns = [
+        column
+        for column in ["ID отзыва", "Товар", "Оценка", "Дата", "Текст отзыва", "Аспект", "Тональность", "Уверенность", "Пояснение"]
+        if column in display_df.columns
+    ]
+    st.dataframe(display_df[display_columns], use_container_width=True, hide_index=True, height=420)
 
-    with dashboard_tab:
-        st.plotly_chart(build_aspect_mentions_chart(agg_df), use_container_width=True)
-        st.plotly_chart(build_sentiment_distribution_chart(agg_df), use_container_width=True)
-        st.plotly_chart(build_confidence_chart(agg_df), use_container_width=True)
-        st.plotly_chart(build_date_sentiment_chart(results_df), use_container_width=True)
-
-    with export_tab:
-        st.caption("XLSX содержит листы с исходными, обработанными, итоговыми и агрегированными данными.")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "Скачать результаты CSV",
-                data=to_csv_bytes(results_df),
-                file_name="review_analysis_results.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with col2:
-            st.download_button(
-                "Скачать полный XLSX",
-                data=to_xlsx_bytes(raw_df, processed_df, results_df, agg_df),
-                file_name="review_analysis_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+    section_header("Экспорт", "Выгрузка результатов", "CSV содержит итоговые строки, XLSX — исходные, обработанные, итоговые и агрегированные данные.")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "Скачать результаты CSV",
+            data=to_csv_bytes(results_df),
+            file_name="review_analysis_results.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with col2:
+        st.download_button(
+            "Скачать полный XLSX",
+            data=to_xlsx_bytes(raw_df, processed_df, results_df, agg_df),
+            file_name="review_analysis_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
 
 
 def main() -> None:

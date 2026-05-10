@@ -71,7 +71,21 @@ def test_aggregate_results() -> None:
     assert packaging["mention_count"] == 2
     assert packaging["positive_count"] == 1
     assert packaging["negative_count"] == 1
+    assert packaging["positive_share"] == 50.0
+    assert packaging["negative_share"] == 50.0
+    assert packaging["neutral_share"] == 0.0
+    assert packaging["negative_rate"] == 50.0
     assert packaging["confidence_avg"] == 0.8
+
+
+def test_aggregate_empty_contains_share_columns() -> None:
+    agg = aggregate_results(pd.DataFrame())
+
+    assert agg.empty
+    assert "positive_share" in agg.columns
+    assert "negative_share" in agg.columns
+    assert "neutral_share" in agg.columns
+    assert "negative_rate" in agg.columns
 
 
 def test_exports_are_bytes() -> None:
@@ -88,4 +102,3 @@ def test_exports_are_bytes() -> None:
 
     assert to_csv_bytes(df).startswith(b"\xef\xbb\xbf")
     assert to_xlsx_bytes(results_df=df)[:2] == b"PK"
-
