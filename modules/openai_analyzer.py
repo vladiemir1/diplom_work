@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import pandas as pd
+import requests
+
+
+GIGACHAT_BASE_URL = "https://gigachat.devices.sberbank.ru/api/v1"
+GIGACHAT_OAUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+GIGACHAT_DEFAULT_SCOPE = "GIGACHAT_API_PERS"
 
 
 ASPECTS = [
@@ -35,6 +42,7 @@ class AnalyzerConfig:
     temperature: float = 0.0
     base_url: str | None = None
     api_key: str | None = field(default=None, repr=False)
+    provider: str | None = None
 
 
 def load_api_key(explicit_api_key: str | None = None) -> str:
@@ -55,6 +63,83 @@ def load_api_key(explicit_api_key: str | None = None) -> str:
             "или введите ключ в интерфейсе."
         )
     return api_key
+
+
+def _load_env() -> None:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except Exception:
+        pass
+
+
+def is_gigachat_config(config: AnalyzerConfig) -> bool:
+    provider = (config.provider or "").lower()
+    base_url = (config.base_url or "").lower()
+    model = (config.model or "").lower()
+    return provider == "gigachat" or "gigachat" in base_url or model.startswith("gigachat")
+
+
+def _env_bool(name: str, default: bool = True) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off", "нет"}
+
+
+def _normalize_gigachat_authorization(value: str) -> str:
+    stripped = value.strip()
+    if stripped.lower().startswith(("basic ", "bearer ")):
+        return stripped
+    return f"Basic {stripped}"
+
+
+def get_gigachat_access_token(
+    credentials: str | None = None,
+    scope: str | None = None,
+    verify_ssl: bool | None = None,
+) -> str:
+    _load_env()
+    access_token = (os.getenv("GIGACHAT_ACCESS_TOKEN") or "").strip()
+    if access_token and not credentials:
+        return access_token
+
+    auth_key = (
+        credentials
+        or os.getenv("GIGACHAT_CREDENTIALS")
+        or os.getenv("GIGACHAT_AUTHORIZATION_KEY")
+        or ""
+    ).strip()
+    if not auth_key:
+        raise AnalyzerError(
+            "Для GigaChat нужен Authorization Key. Укажите GIGACHAT_CREDENTIALS "
+            "в .env или введите ключ в расширенных настройках."
+        )
+
+    verify = _env_bool("GIGACHAT_VERIFY_SSL", True) if verify_ssl is None else verify_ssl
+    try:
+        response = requests.post(
+            GIGACHAT_OAUTH_URL,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+                "RqUID": str(uuid.uuid4()),
+                "Authorization": _normalize_gigachat_authorization(auth_key),
+            },
+            data={"scope": scope or os.getenv("GIGACHAT_SCOPE") or GIGACHAT_DEFAULT_SCOPE},
+            timeout=20,
+            verify=verify,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        raise AnalyzerError(f"Не удалось получить access token GigaChat: {exc}") from exc
+
+    token = str(data.get("access_token") or "").strip()
+    if not token:
+        raise AnalyzerError("GigaChat OAuth не вернул access_token.")
+    return token
 
 
 def build_response_schema() -> dict[str, Any]:
@@ -121,9 +206,23 @@ def _build_client(config: AnalyzerConfig) -> Any:
             "Пакет openai не установлен. Выполните: pip install -r requirements.txt"
         ) from exc
 
-    kwargs: dict[str, Any] = {"api_key": load_api_key(config.api_key)}
-    if config.base_url:
-        kwargs["base_url"] = config.base_url
+    if is_gigachat_config(config):
+        api_key = get_gigachat_access_token(config.api_key)
+        base_url = config.base_url or os.getenv("GIGACHAT_BASE_URL") or GIGACHAT_BASE_URL
+    else:
+        api_key = load_api_key(config.api_key)
+        base_url = config.base_url
+
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    if is_gigachat_config(config) and not _env_bool("GIGACHAT_VERIFY_SSL", True):
+        try:
+            import httpx
+
+            kwargs["http_client"] = httpx.Client(verify=False)
+        except Exception:
+            pass
     return OpenAI(**kwargs)
 
 

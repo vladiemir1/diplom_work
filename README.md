@@ -49,6 +49,33 @@ LLM_BASE_URL=https://provider.example.com/v1
 
 Примеры таких сценариев: OpenRouter, DeepSeek, Groq, локальный gateway или локальный сервер с OpenAI-compatible API. Конкретное имя модели и base URL нужно брать из документации выбранного провайдера.
 
+### GigaChat
+
+Для GigaChat можно использовать Authorization Key из личного кабинета. Приложение само обменяет его на временный access token через OAuth.
+
+Вариант через `.env`:
+
+```env
+LLM_PROVIDER=gigachat
+GIGACHAT_CREDENTIALS=ваш_authorization_key
+GIGACHAT_MODEL=GigaChat
+GIGACHAT_BASE_URL=https://gigachat.devices.sberbank.ru/api/v1
+```
+
+После этого запустите приложение:
+
+```bash
+streamlit run app.py
+```
+
+В интерфейсе можно открыть **Расширенные настройки NLP-модуля**, выбрать `GigaChat`, указать модель `GigaChat` и вставить Authorization Key в поле ключа. Если возникает ошибка сертификата, для локальной разработки можно добавить:
+
+```env
+GIGACHAT_VERIFY_SSL=false
+```
+
+Для финального запуска лучше оставить проверку сертификатов включённой.
+
 ## Запуск
 
 ```bash

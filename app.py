@@ -14,7 +14,7 @@ from modules.data_loader import (
     validate_reviews_df,
 )
 from modules.export import to_csv_bytes, to_xlsx_bytes
-from modules.openai_analyzer import AnalyzerConfig, AnalyzerError, analyze_reviews
+from modules.openai_analyzer import GIGACHAT_BASE_URL, AnalyzerConfig, AnalyzerError, analyze_reviews
 from modules.preprocessing import preprocess_reviews
 from modules.visualization import (
     build_aspect_mentions_chart,
@@ -406,10 +406,17 @@ def run_analysis(text_column: str) -> None:
 
     model = (
         st.session_state.get("llm_model")
+        or os.getenv("GIGACHAT_MODEL")
         or os.getenv("LLM_MODEL")
         or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     )
-    base_url = (st.session_state.get("llm_base_url") or os.getenv("LLM_BASE_URL") or "").strip()
+    provider = (st.session_state.get("llm_provider") or os.getenv("LLM_PROVIDER") or "openai").strip()
+    base_url = (
+        st.session_state.get("llm_base_url")
+        or os.getenv("GIGACHAT_BASE_URL")
+        or os.getenv("LLM_BASE_URL")
+        or ""
+    ).strip()
     api_key = (st.session_state.get("llm_api_key") or "").strip() or None
     batch_size = int(st.session_state.get("batch_size", 10))
     progress = st.progress(0)
@@ -428,6 +435,7 @@ def run_analysis(text_column: str) -> None:
                     batch_size=batch_size,
                     base_url=base_url or None,
                     api_key=api_key,
+                    provider=provider,
                 ),
                 progress_callback=on_progress,
             )
@@ -459,28 +467,56 @@ def render_analysis_controls(text_column: str | None) -> None:
 
     with st.expander("Расширенные настройки NLP-модуля", expanded=False):
         st.caption(
-            "Можно использовать OpenAI или OpenAI-compatible API. "
+            "Можно использовать OpenAI, OpenAI-compatible API или GigaChat. "
             "Если поля оставить пустыми, настройки будут взяты из `.env`."
+        )
+        current_provider = st.session_state.get(
+            "llm_provider",
+            os.getenv("LLM_PROVIDER") or ("gigachat" if os.getenv("GIGACHAT_CREDENTIALS") else "openai"),
+        )
+        st.session_state["llm_provider"] = st.selectbox(
+            "Провайдер",
+            options=["openai", "compatible", "gigachat"],
+            index=["openai", "compatible", "gigachat"].index(current_provider)
+            if current_provider in ["openai", "compatible", "gigachat"]
+            else 0,
+            format_func={
+                "openai": "OpenAI",
+                "compatible": "OpenAI-compatible",
+                "gigachat": "GigaChat",
+            }.get,
         )
         provider_cols = st.columns([1, 1])
         with provider_cols[0]:
+            default_model = "GigaChat" if st.session_state["llm_provider"] == "gigachat" else "gpt-4o-mini"
+            current_model = st.session_state.get("llm_model", "")
+            if st.session_state["llm_provider"] == "gigachat" and current_model in {"", "gpt-4o-mini"}:
+                current_model = "GigaChat"
             st.session_state["llm_model"] = st.text_input(
                 "Модель",
-                value=st.session_state.get(
-                    "llm_model",
-                    os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini",
-                ),
-                help="Например: gpt-4o-mini, openai/gpt-4o-mini, deepseek-chat.",
+                value=current_model
+                or os.getenv("GIGACHAT_MODEL")
+                or os.getenv("LLM_MODEL")
+                or os.getenv("OPENAI_MODEL")
+                or default_model,
+                help="Например: gpt-4o-mini, openai/gpt-4o-mini, deepseek-chat, GigaChat.",
             )
         with provider_cols[1]:
+            default_base_url = GIGACHAT_BASE_URL if st.session_state["llm_provider"] == "gigachat" else ""
+            current_base_url = st.session_state.get("llm_base_url", "")
+            if st.session_state["llm_provider"] == "gigachat" and not current_base_url:
+                current_base_url = GIGACHAT_BASE_URL
             st.session_state["llm_base_url"] = st.text_input(
                 "Base URL API",
-                value=st.session_state.get("llm_base_url", os.getenv("LLM_BASE_URL", "")),
+                value=current_base_url
+                or os.getenv("GIGACHAT_BASE_URL")
+                or os.getenv("LLM_BASE_URL")
+                or default_base_url,
                 placeholder="Оставьте пустым для OpenAI",
-                help="Для OpenAI-compatible провайдеров: https://openrouter.ai/api/v1 и т.п.",
+                help="Для GigaChat: https://gigachat.devices.sberbank.ru/api/v1",
             )
         st.session_state["llm_api_key"] = st.text_input(
-            "API-ключ",
+            "API-ключ / GigaChat Authorization Key",
             value=st.session_state.get("llm_api_key", ""),
             type="password",
             placeholder="Можно оставить пустым, если ключ задан в .env",

@@ -6,7 +6,14 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from modules.openai_analyzer import AnalyzerConfig, AnalyzerError, analyze_reviews, load_api_key
+from modules.openai_analyzer import (
+    AnalyzerConfig,
+    AnalyzerError,
+    analyze_reviews,
+    get_gigachat_access_token,
+    is_gigachat_config,
+    load_api_key,
+)
 
 
 class ResponsesStub:
@@ -94,3 +101,33 @@ def test_missing_openai_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(AnalyzerError):
         load_api_key()
+
+
+def test_gigachat_config_detection() -> None:
+    assert is_gigachat_config(AnalyzerConfig(provider="gigachat"))
+    assert is_gigachat_config(AnalyzerConfig(model="GigaChat"))
+    assert is_gigachat_config(AnalyzerConfig(base_url="https://gigachat.devices.sberbank.ru/api/v1"))
+
+
+def test_get_gigachat_access_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    class ResponseStub:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"access_token": "token-123"}
+
+    calls = []
+
+    def fake_post(*args, **kwargs):
+        calls.append((args, kwargs))
+        return ResponseStub()
+
+    monkeypatch.setattr("modules.openai_analyzer.requests.post", fake_post)
+    monkeypatch.delenv("GIGACHAT_ACCESS_TOKEN", raising=False)
+
+    token = get_gigachat_access_token("authorization-key", verify_ssl=False)
+
+    assert token == "token-123"
+    assert calls[0][1]["headers"]["Authorization"] == "Basic authorization-key"
+    assert calls[0][1]["data"]["scope"] == "GIGACHAT_API_PERS"
