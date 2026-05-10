@@ -54,54 +54,220 @@ def inject_css() -> None:
     st.markdown(
         """
         <style>
+        :root {
+            --app-bg: #f4f5f7;
+            --panel-bg: #ffffff;
+            --panel-muted: #eef2f7;
+            --border: #dce3ee;
+            --text: #172033;
+            --muted: #6f7788;
+            --accent: #135abc;
+            --accent-soft: #e8f0ff;
+            --success: #2f9e44;
+            --danger: #d94848;
+        }
         .stApp {
             background:
-                radial-gradient(circle at 15% 10%, rgba(44, 123, 229, .10), transparent 28%),
-                linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+                radial-gradient(circle at 85% 8%, rgba(19, 90, 188, .10), transparent 24%),
+                linear-gradient(180deg, #f7f8fb 0%, var(--app-bg) 36%, #eef2f6 100%);
         }
         .main .block-container {
-            padding-top: 2rem;
-            max-width: 1180px;
+            padding-top: 1.35rem;
+            padding-bottom: 3rem;
+            max-width: 1200px;
+        }
+        #MainMenu, footer, header {
+            visibility: hidden;
         }
         .hero {
-            background: #ffffff;
-            border: 1px solid #d8e1eb;
+            background:
+                linear-gradient(135deg, rgba(255,255,255,.98), rgba(244,247,252,.96));
+            border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 28px 30px;
-            box-shadow: 0 14px 36px rgba(31, 45, 61, .08);
-            margin-bottom: 22px;
+            padding: 28px 30px 24px 30px;
+            box-shadow: 0 18px 45px rgba(35, 50, 75, .08);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 38%;
+            height: 100%;
+            background:
+                linear-gradient(90deg, transparent, rgba(19, 90, 188, .05)),
+                repeating-linear-gradient(135deg, rgba(19, 90, 188, .10) 0 1px, transparent 1px 18px);
+            pointer-events: none;
+        }
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 780px;
+        }
+        .eyebrow {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
         }
         .hero h1 {
             margin: 0 0 8px 0;
-            font-size: 34px;
+            font-size: 36px;
             line-height: 1.15;
             letter-spacing: 0;
-            color: #172033;
+            color: var(--text);
         }
         .hero p {
             margin: 0;
-            color: #4b587c;
+            color: #4d5870;
             font-size: 16px;
+            max-width: 680px;
+        }
+        .hero-steps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 18px;
+        }
+        .step-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 11px;
+            border: 1px solid #d6deeb;
+            background: rgba(255,255,255,.72);
+            color: #33415c;
+            border-radius: 999px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .step-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .section-head {
+            margin: 26px 0 12px 0;
+        }
+        .section-kicker {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .section-title {
+            color: var(--text);
+            font-size: 24px;
+            font-weight: 750;
+            line-height: 1.2;
+            margin: 0;
+        }
+        .section-note {
+            color: var(--muted);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+        .empty-state {
+            margin: 14px 0 8px 0;
+            padding: 22px 24px;
+            background: rgba(255,255,255,.72);
+            border: 1px dashed #c8d3e3;
+            border-radius: 8px;
+            color: #536078;
+        }
+        .empty-state-title {
+            color: var(--text);
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 4px;
         }
         .metric-card {
-            background: #ffffff;
-            border: 1px solid #d8e1eb;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 16px 18px;
+            padding: 16px 18px 17px 18px;
             min-height: 96px;
+            box-shadow: 0 10px 24px rgba(30, 45, 70, .055);
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent);
         }
         .metric-label {
-            color: #5c6780;
+            color: var(--muted);
             font-size: 13px;
             margin-bottom: 8px;
         }
         .metric-value {
-            color: #172033;
+            color: var(--text);
             font-size: 28px;
             font-weight: 700;
         }
+        .column-list {
+            display: block;
+            padding: 11px 13px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #536078;
+            font-size: 13px;
+            line-height: 1.45;
+            margin: 10px 0 14px 0;
+        }
+        .stDataFrame {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 24px rgba(30, 45, 70, .045);
+        }
         div[data-testid="stTabs"] button {
             font-size: 15px;
+            color: #4d5870;
+        }
+        div[data-testid="stTabs"] button[aria-selected="true"] {
+            color: var(--accent);
+            font-weight: 700;
+        }
+        div[data-testid="stFileUploader"] section {
+            background: rgba(255,255,255,.78);
+            border: 1px dashed #b7c5d8;
+            border-radius: 8px;
+        }
+        div[data-testid="stFileUploader"] section:hover {
+            border-color: var(--accent);
+            background: #ffffff;
+        }
+        .stButton > button, .stDownloadButton > button {
+            border-radius: 8px;
+            font-weight: 700;
+        }
+        .stButton > button[kind="primary"] {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .stAlert {
+            border-radius: 8px;
         }
         </style>
         """,
@@ -121,9 +287,26 @@ def metric_card(label: str, value: object) -> None:
     )
 
 
+def section_header(kicker: str, title: str, note: str | None = None) -> None:
+    note_html = f'<div class="section-note">{note}</div>' if note else ""
+    st.markdown(
+        f"""
+        <div class="section-head">
+            <div class="section-kicker">{kicker}</div>
+            <h2 class="section-title">{title}</h2>
+            {note_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_data_acquisition() -> None:
-    st.subheader("Получение данных")
-    st.caption("Загрузите таблицу с отзывами. Текстовый столбец можно выбрать после загрузки.")
+    section_header(
+        "Шаг 1",
+        "Получение данных",
+        "Загрузите таблицу с отзывами. Текстовый столбец можно выбрать после загрузки.",
+    )
     uploaded_file = st.file_uploader(
         "Загрузите CSV или XLSX-файл с отзывами",
         type=["csv", "xlsx"],
@@ -141,11 +324,22 @@ def render_data_acquisition() -> None:
 def render_preview() -> str | None:
     raw_df = st.session_state.get("raw_df")
     if raw_df is None:
-        st.info("Загрузите файл или получите отзывы Wildberries, чтобы продолжить.")
+        st.markdown(
+            """
+            <div class="empty-state">
+                <div class="empty-state-title">Данные ещё не загружены</div>
+                <div>После загрузки файла здесь появятся предпросмотр, выбор текстового столбца и запуск анализа.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         return None
 
-    st.subheader("Предпросмотр")
-    st.caption(f"Источник: {st.session_state.get('source_name') or 'данные пользователя'}")
+    section_header(
+        "Шаг 2",
+        "Предпросмотр",
+        f"Источник: {st.session_state.get('source_name') or 'данные пользователя'}",
+    )
     cols = st.columns(3)
     with cols[0]:
         metric_card("Строк в таблице", len(raw_df))
@@ -155,7 +349,10 @@ def render_preview() -> str | None:
         metric_card("Есть review_text", "Да" if "review_text" in raw_df.columns else "Нет")
 
     st.dataframe(raw_df.head(20), use_container_width=True)
-    st.write("Найденные столбцы:", ", ".join(map(str, raw_df.columns)))
+    st.markdown(
+        f'<div class="column-list"><strong>Найденные столбцы:</strong> {", ".join(map(str, raw_df.columns))}</div>',
+        unsafe_allow_html=True,
+    )
 
     text_columns = selectable_text_columns(raw_df)
     default_index = text_columns.index("review_text") if "review_text" in text_columns else 0
@@ -237,8 +434,11 @@ def render_analysis_controls(text_column: str | None) -> None:
     if st.session_state.get("raw_df") is None:
         return
 
-    st.subheader("Запуск анализа")
-    st.caption("После запуска приложение обработает валидные отзывы и построит таблицы с дашбордом.")
+    section_header(
+        "Шаг 3",
+        "Запуск анализа",
+        "После запуска приложение обработает валидные отзывы и построит таблицы с дашбордом.",
+    )
 
     with st.expander("Расширенные настройки NLP-модуля", expanded=False):
         st.caption(
@@ -290,6 +490,12 @@ def render_results() -> None:
 
     if results_df is None or agg_df is None:
         return
+
+    section_header(
+        "Итоги",
+        "Результаты анализа",
+        "Сводные показатели, таблица аспектов, графики и экспорт в одном рабочем пространстве.",
+    )
 
     overview_tab, table_tab, dashboard_tab, export_tab = st.tabs(
         ["Обзор", "Результаты по отзывам", "Дашборд", "Экспорт"]
@@ -367,8 +573,17 @@ def main() -> None:
     st.markdown(
         f"""
         <section class="hero">
-            <h1>{APP_TITLE}</h1>
-            <p>Загрузка отзывов, аспектный анализ, аналитика по проблемным зонам и экспорт результатов.</p>
+            <div class="hero-content">
+                <div class="eyebrow">NLP Review Analytics</div>
+                <h1>{APP_TITLE}</h1>
+                <p>Рабочее пространство для загрузки отзывов, аспектного анализа, поиска проблемных зон и выгрузки результатов.</p>
+                <div class="hero-steps">
+                    <span class="step-pill"><span class="step-index">1</span>Загрузка CSV/XLSX</span>
+                    <span class="step-pill"><span class="step-index">2</span>Аспектный анализ</span>
+                    <span class="step-pill"><span class="step-index">3</span>Дашборд</span>
+                    <span class="step-pill"><span class="step-index">4</span>Экспорт</span>
+                </div>
+            </div>
         </section>
         """,
         unsafe_allow_html=True,
