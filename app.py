@@ -4,6 +4,7 @@ import os
 
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 from modules.aggregation import aggregate_results
 from modules.data_loader import (
@@ -619,6 +620,7 @@ def render_results() -> None:
 
 
 def main() -> None:
+    load_dotenv()
     st.set_page_config(page_title=APP_TITLE, layout="wide")
     init_state()
     inject_css()
