@@ -326,7 +326,7 @@ def _call_openai_batch(
                 messages=messages
                 + [
                     {
-                        "role": "system",
+                        "role": "user",
                         "content": "Верни валидный JSON без Markdown и без пояснений вне JSON.",
                     }
                 ],
@@ -351,30 +351,38 @@ def _clamp_confidence(value: Any) -> float:
 
 
 def _normalize_model_items(raw: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    if not isinstance(raw, dict) or not isinstance(raw.get("items"), list):
+    if not isinstance(raw, dict):
+        raise AnalyzerError("Ответ модели не соответствует ожидаемой структуре.")
+
+    raw_items = raw.get("items")
+    if raw_items is None:
+        raw_items = raw.get("reviews")
+    if not isinstance(raw_items, list):
         raise AnalyzerError("Ответ модели не соответствует ожидаемой структуре.")
 
     normalized: dict[str, list[dict[str, Any]]] = {}
-    for item in raw["items"]:
+    for item in raw_items:
         review_id = str(item.get("review_id", ""))
         results = item.get("results") or []
         normalized_results = []
         for result in results:
-            aspect = result.get("aspect")
+            raw_aspect = result.get("aspect")
+            aspects = raw_aspect if isinstance(raw_aspect, list) else [raw_aspect]
             sentiment = result.get("sentiment")
-            if aspect not in ASPECTS:
-                aspect = "Общее впечатление"
             if sentiment not in SENTIMENTS:
                 sentiment = "neutral"
-            normalized_results.append(
-                {
-                    "aspect": aspect,
-                    "sentiment": sentiment,
-                    "sentiment_label": SENTIMENT_LABELS[sentiment],
-                    "confidence": _clamp_confidence(result.get("confidence")),
-                    "explanation": str(result.get("explanation") or "").strip(),
-                }
-            )
+            for aspect in aspects:
+                if aspect not in ASPECTS:
+                    aspect = "Общее впечатление"
+                normalized_results.append(
+                    {
+                        "aspect": aspect,
+                        "sentiment": sentiment,
+                        "sentiment_label": SENTIMENT_LABELS[sentiment],
+                        "confidence": _clamp_confidence(result.get("confidence")),
+                        "explanation": str(result.get("explanation") or "").strip(),
+                    }
+                )
         normalized[review_id] = normalized_results or [
             {
                 "aspect": "Общее впечатление",
@@ -444,7 +452,16 @@ def analyze_reviews(
     rows = []
     for _, row in df.iterrows():
         review_id = str(row["review_id"])
-        for result in analyzed.get(review_id, []):
+        row_results = analyzed.get(review_id) or [
+            {
+                "aspect": "Общее впечатление",
+                "sentiment": "neutral",
+                "sentiment_label": SENTIMENT_LABELS["neutral"],
+                "confidence": 0.3,
+                "explanation": "Модель не вернула результат по этому отзыву.",
+            }
+        ]
+        for result in row_results:
             rows.append(
                 {
                     "review_id": row.get("review_id"),
