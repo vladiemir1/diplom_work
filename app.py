@@ -72,12 +72,15 @@ def inject_css() -> None:
                 linear-gradient(180deg, #f7f8fb 0%, var(--app-bg) 36%, #eef2f6 100%);
         }
         .main .block-container {
-            padding-top: .65rem;
+            padding-top: 0;
             padding-bottom: 3rem;
             max-width: 1200px;
         }
         #MainMenu, footer, header {
             visibility: hidden;
+        }
+        div[data-testid="stHeader"], div[data-testid="stDecoration"] {
+            display: none;
         }
         .hero {
             background:
@@ -181,63 +184,10 @@ def inject_css() -> None:
             font-size: 14px;
             margin-top: 6px;
         }
-        .preview-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-            gap: 16px;
-            align-items: start;
-            margin: 6px 0 18px 0;
-        }
-        .preview-panel {
-            background: rgba(255,255,255,.78);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 14px 16px;
-            box-shadow: 0 10px 24px rgba(30, 45, 70, .045);
-        }
-        .preview-panel-title {
-            color: var(--text);
-            font-size: 15px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-        .preview-panel-note {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.45;
-            margin-bottom: 12px;
-        }
-        .preview-metrics {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 10px;
-        }
-        .mini-metric {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px 14px;
-        }
-        .mini-metric-label {
-            color: var(--muted);
-            font-size: 13px;
-        }
-        .mini-metric-value {
-            color: var(--text);
-            font-size: 20px;
-            font-weight: 750;
-        }
         .table-spacer {
-            margin-top: 16px;
+            margin-top: 14px;
         }
         @media (max-width: 900px) {
-            .preview-grid {
-                grid-template-columns: 1fr;
-            }
             .hero::after {
                 opacity: .35;
             }
@@ -348,15 +298,6 @@ def metric_card(label: str, value: object) -> None:
     )
 
 
-def mini_metric(label: str, value: object) -> str:
-    return f"""
-    <div class="mini-metric">
-        <div class="mini-metric-label">{label}</div>
-        <div class="mini-metric-value">{value}</div>
-    </div>
-    """
-
-
 def section_header(kicker: str, title: str, note: str | None = None) -> None:
     note_html = f'<div class="section-note">{note}</div>' if note else ""
     st.markdown(
@@ -414,41 +355,28 @@ def render_preview() -> str | None:
     text_columns = selectable_text_columns(raw_df)
     default_index = text_columns.index("review_text") if "review_text" in text_columns else 0
 
-    left, right = st.columns([2.2, 1])
-    with left:
-        st.markdown(
-            """
-            <div class="preview-panel">
-                <div class="preview-panel-title">Настройка входной таблицы</div>
-                <div class="preview-panel-note">Проверьте найденные поля и выберите колонку, где хранится текст отзыва.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        text_column = st.selectbox(
-            "Столбец с текстом отзыва",
-            options=text_columns,
-            index=default_index,
-        )
-        st.markdown(
-            f'<div class="column-list"><strong>Найденные столбцы:</strong> {", ".join(map(str, raw_df.columns))}</div>',
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.markdown(
-            '<div class="preview-metrics">'
-            + mini_metric("Строк", len(raw_df))
-            + mini_metric("Столбцов", len(raw_df.columns))
-            + mini_metric("review_text", "Да" if "review_text" in raw_df.columns else "Нет")
-            + "</div>",
-            unsafe_allow_html=True,
-        )
+    cols = st.columns(3)
+    with cols[0]:
+        metric_card("Строк в таблице", len(raw_df))
+    with cols[1]:
+        metric_card("Столбцов", len(raw_df.columns))
+    with cols[2]:
+        metric_card("Есть review_text", "Да" if "review_text" in raw_df.columns else "Нет")
 
     st.markdown('<div class="table-spacer"></div>', unsafe_allow_html=True)
     st.dataframe(
         raw_df.head(20),
         use_container_width=True,
         height=420,
+    )
+    st.markdown(
+        f'<div class="column-list"><strong>Найденные столбцы:</strong> {", ".join(map(str, raw_df.columns))}</div>',
+        unsafe_allow_html=True,
+    )
+    text_column = st.selectbox(
+        "Выберите столбец с текстом отзыва",
+        options=text_columns,
+        index=default_index,
     )
 
     is_valid, errors = validate_reviews_df(raw_df, text_column=text_column)
