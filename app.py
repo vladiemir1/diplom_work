@@ -22,7 +22,6 @@ from modules.visualization import (
     build_date_sentiment_chart,
     build_sentiment_distribution_chart,
 )
-from modules.wb_parser import WBParserError, extract_nm_id, fetch_and_save_wb_reviews
 
 
 APP_TITLE = "Система анализа тональности отзывов маркетплейса"
@@ -124,45 +123,19 @@ def metric_card(label: str, value: object) -> None:
 
 def render_data_acquisition() -> None:
     st.subheader("Получение данных")
-    source_tab, wb_tab = st.tabs(["Загрузка файла", "Парсер Wildberries"])
-
-    with source_tab:
-        uploaded_file = st.file_uploader(
-            "Загрузите CSV или XLSX-файл с отзывами",
-            type=["csv", "xlsx"],
-            help="Текстовый столбец можно выбрать после загрузки.",
-        )
-        if uploaded_file is not None:
-            try:
-                df = load_reviews(uploaded_file)
-                set_raw_data(df, uploaded_file.name)
-                st.success(f"Файл загружен: {uploaded_file.name}")
-            except DataLoadError as exc:
-                st.error(str(exc))
-
-    with wb_tab:
-        st.caption("Публичный сбор отзывов без API-ключа продавца. Доступность зависит от ответа Wildberries.")
-        wb_url = st.text_input(
-            "Ссылка на товар Wildberries",
-            placeholder="https://www.wildberries.ru/catalog/5870243/detail.aspx",
-        )
-        limit = st.number_input(
-            "Максимум отзывов",
-            min_value=10,
-            max_value=1000,
-            value=100,
-            step=10,
-        )
-        if st.button("Получить отзывы WB", use_container_width=True):
-            try:
-                nm_id = extract_nm_id(wb_url)
-                with st.status(f"Получаю отзывы по артикулу {nm_id}...", expanded=True) as status:
-                    df, saved_path = fetch_and_save_wb_reviews(wb_url, limit=int(limit))
-                    status.update(label=f"Готово: сохранено {len(df)} отзывов", state="complete")
-                set_raw_data(df, str(saved_path))
-                st.success(f"Отзывы сохранены в {saved_path}")
-            except WBParserError as exc:
-                st.error(str(exc))
+    st.caption("Загрузите таблицу с отзывами. Текстовый столбец можно выбрать после загрузки.")
+    uploaded_file = st.file_uploader(
+        "Загрузите CSV или XLSX-файл с отзывами",
+        type=["csv", "xlsx"],
+        help="Поддерживаются экспортированные таблицы с отзывами маркетплейса.",
+    )
+    if uploaded_file is not None:
+        try:
+            df = load_reviews(uploaded_file)
+            set_raw_data(df, uploaded_file.name)
+            st.success(f"Файл загружен: {uploaded_file.name}")
+        except DataLoadError as exc:
+            st.error(str(exc))
 
 
 def render_preview() -> str | None:
