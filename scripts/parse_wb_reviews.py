@@ -23,8 +23,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limit",
         type=int,
-        default=100,
-        help="Максимальное число отзывов для сохранения. По умолчанию: 100.",
+        default=400,
+        help="Максимальное число отзывов для сохранения. По умолчанию: 400.",
     )
     parser.add_argument(
         "--output-dir",
@@ -56,4 +56,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

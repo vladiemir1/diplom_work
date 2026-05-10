@@ -76,7 +76,7 @@ streamlit run app.py
 Пример запуска:
 
 ```bash
-python scripts/parse_wb_reviews.py "https://www.wildberries.ru/catalog/5870243/detail.aspx" --limit 100
+python scripts/parse_wb_reviews.py "https://www.wildberries.ru/catalog/5870243/detail.aspx"
 ```
 
 Можно передать и сам артикул:
@@ -85,7 +85,7 @@ python scripts/parse_wb_reviews.py "https://www.wildberries.ru/catalog/5870243/d
 python scripts/parse_wb_reviews.py 5870243 --limit 50
 ```
 
-Скрипт извлечёт `nmId`, попробует получить публичные отзывы и сохранит CSV в папку `data/`:
+По умолчанию скрипт сохраняет до 400 отзывов. Через `--limit` можно указать другое значение. Скрипт извлечёт `nmId`, попробует получить публичные отзывы и сохранит CSV в папку `data/`:
 
 ```text
 data/wb_reviews_<nmId>.csv
