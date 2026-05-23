@@ -20,7 +20,6 @@ ASPECTS = [
     "Соответствие описанию",
     "Упаковка",
     "Доставка",
-    "Общее впечатление",
 ]
 
 SENTIMENTS = ["positive", "negative", "neutral"]
@@ -58,10 +57,7 @@ def load_api_key(explicit_api_key: str | None = None) -> str:
 
     api_key = (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
-        raise AnalyzerError(
-            "Не найден API-ключ. Укажите LLM_API_KEY/OPENAI_API_KEY в .env "
-            "или введите ключ в интерфейсе."
-        )
+        raise AnalyzerError("Не найден ключ доступа к сервису аналитики.")
     return api_key
 
 
@@ -112,10 +108,7 @@ def get_gigachat_access_token(
         or ""
     ).strip()
     if not auth_key:
-        raise AnalyzerError(
-            "Для GigaChat нужен Authorization Key. Укажите GIGACHAT_CREDENTIALS "
-            "в .env или введите ключ в расширенных настройках."
-        )
+        raise AnalyzerError("Для работы сервиса нужен ключ авторизации.")
 
     verify = _env_bool("GIGACHAT_VERIFY_SSL", True) if verify_ssl is None else verify_ssl
     try:
@@ -134,11 +127,11 @@ def get_gigachat_access_token(
         response.raise_for_status()
         data = response.json()
     except Exception as exc:
-        raise AnalyzerError(f"Не удалось получить access token GigaChat: {exc}") from exc
+        raise AnalyzerError("Не удалось получить токен доступа к сервису аналитики.") from exc
 
     token = str(data.get("access_token") or "").strip()
     if not token:
-        raise AnalyzerError("GigaChat OAuth не вернул access_token.")
+        raise AnalyzerError("Сервис авторизации не вернул токен.")
     return token
 
 
@@ -188,8 +181,8 @@ SYSTEM_PROMPT = """
 
 Задача:
 1. Для каждого отзыва найди один или несколько аспектов.
-2. Используй только эти аспекты: Качество товара, Соответствие описанию, Упаковка, Доставка, Общее впечатление.
-3. Если в отзыве нет конкретного аспекта, используй Общее впечатление.
+2. Используй только эти аспекты: Качество товара, Соответствие описанию, Упаковка, Доставка.
+3. Если в отзыве нет ни одного из четырёх аспектов, верни пустой массив results.
 4. Для каждого аспекта определи тональность: positive, negative или neutral.
 5. Учитывай rating как дополнительный сигнал, но не заменяй им смысл текста.
 6. confidence указывай числом от 0 до 1.
@@ -202,9 +195,7 @@ def _build_client(config: AnalyzerConfig) -> Any:
     try:
         from openai import OpenAI
     except ImportError as exc:
-        raise AnalyzerError(
-            "Пакет openai не установлен. Выполните: pip install -r requirements.txt"
-        ) from exc
+        raise AnalyzerError("Отсутствует необходимый системный пакет.") from exc
 
     if is_gigachat_config(config):
         api_key = get_gigachat_access_token(config.api_key)
@@ -263,7 +254,7 @@ def _extract_response_text(response: Any) -> str:
     if chunks:
         return "".join(chunks)
 
-    raise AnalyzerError("OpenAI API вернул ответ без текстового содержимого.")
+    raise AnalyzerError("Внешний сервис вернул пустой ответ.")
 
 
 def _parse_json_response(text: str) -> dict[str, Any]:
@@ -293,14 +284,13 @@ def _parse_json_response(text: str) -> dict[str, Any]:
                 continue
 
     if parsed is None:
-        snippet = cleaned[:500].replace("\n", " ")
-        raise AnalyzerError(f"LLM API вернул некорректный JSON. Фрагмент ответа: {snippet}")
+        raise AnalyzerError("Внешний сервис вернул данные в некорректном формате.")
 
     if isinstance(parsed, list):
         return {"items": parsed}
     if isinstance(parsed, dict):
         return parsed
-    raise AnalyzerError("LLM API вернул JSON не в объектном формате.")
+    raise AnalyzerError("Внешний сервис вернул данные не в формате объекта.")
 
 
 def _completion_create(client: Any, **kwargs: Any) -> Any:
@@ -371,7 +361,7 @@ def _call_openai_batch(
                 temperature=config.temperature,
             )
         except Exception as exc:
-            raise AnalyzerError(f"LLM API недоступен или отклонил запрос: {exc}") from exc
+            raise AnalyzerError("Сервис недоступен или отклонил запрос.") from exc
 
     return _parse_json_response(_extract_response_text(response))
 
@@ -384,15 +374,22 @@ def _clamp_confidence(value: Any) -> float:
     return max(0.0, min(1.0, number))
 
 
-def _normalize_model_items(raw: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    if not isinstance(raw, dict):
+def _normalize_model_items(raw: dict[str, Any] | list[Any]) -> dict[str, list[dict[str, Any]]]:
+    if isinstance(raw, list):
+        raw_items = raw
+    elif isinstance(raw, dict):
+        raw_items = raw.get("items")
+        if raw_items is None:
+            raw_items = raw.get("reviews")
+        if raw_items is None:
+            # Maybe the model returned an empty dict or ignored the format
+            raw_items = []
+    else:
         raise AnalyzerError("Ответ модели не соответствует ожидаемой структуре.")
 
-    raw_items = raw.get("items")
-    if raw_items is None:
-        raw_items = raw.get("reviews")
     if not isinstance(raw_items, list):
-        raise AnalyzerError("Ответ модели не соответствует ожидаемой структуре.")
+        # Could be a hallucinated dict in a dict
+        raw_items = []
 
     normalized: dict[str, list[dict[str, Any]]] = {}
     for item in raw_items:
@@ -407,7 +404,7 @@ def _normalize_model_items(raw: dict[str, Any]) -> dict[str, list[dict[str, Any]
                 sentiment = "neutral"
             for aspect in aspects:
                 if aspect not in ASPECTS:
-                    aspect = "Общее впечатление"
+                    continue
                 normalized_results.append(
                     {
                         "aspect": aspect,
@@ -417,15 +414,7 @@ def _normalize_model_items(raw: dict[str, Any]) -> dict[str, list[dict[str, Any]
                         "explanation": str(result.get("explanation") or "").strip(),
                     }
                 )
-        normalized[review_id] = normalized_results or [
-            {
-                "aspect": "Общее впечатление",
-                "sentiment": "neutral",
-                "sentiment_label": SENTIMENT_LABELS["neutral"],
-                "confidence": 0.3,
-                "explanation": "Модель не выделила конкретный аспект.",
-            }
-        ]
+        normalized[review_id] = normalized_results
     return normalized
 
 
@@ -486,15 +475,7 @@ def analyze_reviews(
     rows = []
     for _, row in df.iterrows():
         review_id = str(row["review_id"])
-        row_results = analyzed.get(review_id) or [
-            {
-                "aspect": "Общее впечатление",
-                "sentiment": "neutral",
-                "sentiment_label": SENTIMENT_LABELS["neutral"],
-                "confidence": 0.3,
-                "explanation": "Модель не вернула результат по этому отзыву.",
-            }
-        ]
+        row_results = analyzed.get(review_id) or []
         for result in row_results:
             rows.append(
                 {

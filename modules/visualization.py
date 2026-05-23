@@ -41,10 +41,10 @@ def _empty_figure(title: str) -> go.Figure:
 
 
 def build_sentiment_share_chart(agg_df: pd.DataFrame) -> go.Figure:
-    if agg_df.empty:
+    chart_df = agg_df[agg_df["aspect"] != "Общее впечатление"].copy() if not agg_df.empty else agg_df
+    if chart_df.empty:
         return _empty_figure("Тональность по аспектам")
-
-    long_df = agg_df.melt(
+    long_df = chart_df.melt(
         id_vars="aspect",
         value_vars=list(SHARE_COLUMNS),
         var_name="sentiment",
@@ -69,10 +69,11 @@ def build_sentiment_share_chart(agg_df: pd.DataFrame) -> go.Figure:
 
 
 def build_negative_rate_chart(agg_df: pd.DataFrame) -> go.Figure:
-    if agg_df.empty:
+    chart_df = agg_df[agg_df["aspect"] != "Общее впечатление"].copy() if not agg_df.empty else agg_df
+    if chart_df.empty:
         return _empty_figure("Аспекты по доле негатива")
 
-    sorted_df = agg_df.sort_values("negative_rate", ascending=True)
+    sorted_df = chart_df.sort_values("negative_rate", ascending=True)
     fig = px.bar(
         sorted_df,
         x="negative_rate",
@@ -92,11 +93,11 @@ def build_negative_rate_chart(agg_df: pd.DataFrame) -> go.Figure:
 
 
 def build_overall_sentiment_donut(results_df: pd.DataFrame) -> go.Figure:
-    if results_df.empty or "sentiment_label" not in results_df.columns:
+    chart_df = results_df[results_df["aspect"] != "Общее впечатление"].copy() if (not results_df.empty and "aspect" in results_df.columns) else results_df
+    if chart_df.empty or "sentiment_label" not in chart_df.columns:
         return _empty_figure("Общая тональность")
-
     counts = (
-        results_df["sentiment_label"]
+        chart_df["sentiment_label"]
         .fillna("Нейтральная")
         .value_counts()
         .rename_axis("sentiment_label")

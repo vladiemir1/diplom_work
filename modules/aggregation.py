@@ -22,7 +22,12 @@ def aggregate_results(results_df: pd.DataFrame) -> pd.DataFrame:
     if results_df.empty:
         return pd.DataFrame(columns=columns)
 
-    grouped = results_df.groupby("aspect", dropna=False)
+    # Exclude legacy "Общее впечатление" aspect if present
+    filtered = results_df[results_df["aspect"] != "Общее впечатление"].copy()
+    if filtered.empty:
+        return pd.DataFrame(columns=columns)
+
+    grouped = filtered.groupby("aspect", dropna=False)
     rows = []
     for aspect, group in grouped:
         sentiments = group["sentiment"].fillna("neutral")

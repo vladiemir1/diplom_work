@@ -76,7 +76,7 @@ def test_analyze_reviews_with_mocked_openai_client() -> None:
     assert "json_schema" in json.dumps(client.chat.completions.calls[0], ensure_ascii=False)
 
 
-def test_analyze_reviews_adds_general_aspect_when_model_returns_empty_results() -> None:
+def test_analyze_reviews_returns_empty_when_model_returns_no_aspects() -> None:
     df = pd.DataFrame(
         {
             "review_id": [1],
@@ -91,8 +91,7 @@ def test_analyze_reviews_adds_general_aspect_when_model_returns_empty_results() 
 
     result = analyze_reviews(df, client=client)
 
-    assert result.loc[0, "aspect"] == "Общее впечатление"
-    assert result.loc[0, "sentiment_label"] == "Нейтральная"
+    assert len(result) == 0
 
 
 def test_missing_openai_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -14,8 +14,8 @@ from modules.data_loader import (
     selectable_text_columns,
     validate_reviews_df,
 )
-from modules.export import to_csv_bytes, to_xlsx_bytes
-from modules.openai_analyzer import GIGACHAT_BASE_URL, AnalyzerConfig, AnalyzerError, analyze_reviews
+from modules.export import to_csv_bytes, to_wide_format, to_xlsx_bytes
+from modules.openai_analyzer import AnalyzerConfig, AnalyzerError, analyze_reviews
 from modules.preprocessing import preprocess_reviews
 from modules.visualization import (
     build_negative_rate_chart,
@@ -33,6 +33,7 @@ def init_state() -> None:
         "processed_df": None,
         "results_df": None,
         "agg_df": None,
+        "wide_df": None,
         "source_name": "",
     }
     for key, value in defaults.items():
@@ -40,7 +41,7 @@ def init_state() -> None:
 
 
 def clear_analysis() -> None:
-    for key in ("processed_df", "results_df", "agg_df"):
+    for key in ("processed_df", "results_df", "agg_df", "wide_df"):
         st.session_state[key] = None
 
 
@@ -72,9 +73,19 @@ def inject_css() -> None:
                 linear-gradient(180deg, #f7f8fb 0%, var(--app-bg) 36%, #eef2f6 100%);
         }
         .main .block-container {
-            padding-top: 0;
-            padding-bottom: 3rem;
+            padding-top: 0 !important;
+            padding-bottom: 2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            margin-top: -1.5rem;
             max-width: 1200px;
+        }
+        /* Hide anchor links in headers */
+        h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+            display: none !important;
+        }
+        .stMarkdown a.header-anchor {
+            display: none !important;
         }
         #MainMenu, footer, header {
             visibility: hidden;
@@ -87,9 +98,9 @@ def inject_css() -> None:
                 linear-gradient(135deg, rgba(255,255,255,.98), rgba(244,247,252,.96));
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 18px 24px 18px 24px;
+            padding: 24px 32px !important;
             box-shadow: 0 14px 32px rgba(35, 50, 75, .07);
-            margin-bottom: 16px;
+            margin-bottom: 5px !important;
             position: relative;
             overflow: hidden;
         }
@@ -116,11 +127,11 @@ def inject_css() -> None:
             font-weight: 700;
             letter-spacing: .08em;
             text-transform: uppercase;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
         .hero h1 {
-            margin: 0 0 6px 0;
-            font-size: 30px;
+            margin: 0 0 4px 0;
+            font-size: 28px;
             line-height: 1.15;
             letter-spacing: 0;
             color: var(--text);
@@ -128,20 +139,20 @@ def inject_css() -> None:
         .hero p {
             margin: 0;
             color: #4d5870;
-            font-size: 14px;
+            font-size: 13px;
             max-width: 620px;
         }
         .hero-steps {
             display: flex;
             flex-wrap: wrap;
             gap: 7px;
-            margin-top: 13px;
+            margin-top: 10px;
         }
         .step-pill {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 10px;
+            padding: 5px 10px;
             border: 1px solid #d6deeb;
             background: rgba(255,255,255,.72);
             color: #33415c;
@@ -162,7 +173,7 @@ def inject_css() -> None:
             font-weight: 700;
         }
         .section-head {
-            margin: 18px 0 10px 0;
+            margin: 4px 0 2px 0;
         }
         .section-kicker {
             color: var(--accent);
@@ -182,10 +193,10 @@ def inject_css() -> None:
         .section-note {
             color: var(--muted);
             font-size: 14px;
-            margin-top: 6px;
+            margin-top: 4px;
         }
         .table-spacer {
-            margin-top: 14px;
+            margin-top: 10px;
         }
         @media (max-width: 900px) {
             .hero::after {
@@ -193,8 +204,8 @@ def inject_css() -> None:
             }
         }
         .empty-state {
-            margin: 14px 0 8px 0;
-            padding: 22px 24px;
+            margin: 10px 0 8px 0;
+            padding: 18px 20px;
             background: rgba(255,255,255,.72);
             border: 1px dashed #c8d3e3;
             border-radius: 8px;
@@ -305,7 +316,7 @@ def inject_css() -> None:
         .bar-neutral { background: #868e96; }
         .aspect-stats {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 8px;
         }
         .aspect-stat-label {
@@ -365,6 +376,28 @@ def inject_css() -> None:
             border-color: var(--accent);
             background: #ffffff;
         }
+        /* Русификация uploader (попытка через CSS) */
+        [data-testid="stFileUploadDropzone"] > div > span {
+            display: none !important;
+        }
+        [data-testid="stFileUploadDropzone"] > div::before {
+            content: "Перетащите файл сюда";
+            display: block;
+            font-size: 14px;
+            color: #172033;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        [data-testid="stFileUploadDropzone"] > div > small {
+            display: none !important;
+        }
+        [data-testid="stFileUploadDropzone"] > div::after {
+            content: "Ограничение: 200 МБ на файл • CSV, XLSX";
+            display: block;
+            font-size: 12px;
+            color: #6f7788;
+            margin-top: 5px;
+        }
         .stButton > button, .stDownloadButton > button {
             border-radius: 8px;
             font-weight: 700;
@@ -408,8 +441,14 @@ def render_aspect_cards(agg_df: pd.DataFrame) -> None:
         st.info("Нет аспектных данных для отображения.")
         return
 
+    # Only show the 4 approved aspects
+    display_df = agg_df[agg_df["aspect"] != "Общее впечатление"]
+    if display_df.empty:
+        st.info("Нет аспектных данных для отображения.")
+        return
+
     cards = []
-    for _, row in agg_df.iterrows():
+    for _, row in display_df.iterrows():
         positive = float(row.get("positive_share", 0))
         negative = float(row.get("negative_share", 0))
         neutral = float(row.get("neutral_share", 0))
@@ -431,8 +470,6 @@ def render_aspect_cards(agg_df: pd.DataFrame) -> None:
             f'<div class="aspect-stat-value">{negative:.1f}%</div></div>'
             "<div><div class=\"aspect-stat-label\">Нейтрально</div>"
             f'<div class="aspect-stat-value">{neutral:.1f}%</div></div>'
-            "<div><div class=\"aspect-stat-label\">Уверенность</div>"
-            f'<div class="aspect-stat-value">{float(row["confidence_avg"]):.3f}</div></div>'
             "</div>"
             "</div>"
         )
@@ -458,7 +495,7 @@ def render_data_acquisition() -> None:
     section_header(
         "Шаг 1",
         "Получение данных",
-        "Загрузите таблицу с отзывами. Текстовый столбец можно выбрать после загрузки.",
+        "Загрузите CSV или XLSX-файл с отзывами.",
     )
     uploaded_file = st.file_uploader(
         "Загрузите CSV или XLSX-файл с отзывами",
@@ -536,8 +573,8 @@ def run_analysis(text_column: str) -> None:
     try:
         prepared_df = prepare_reviews_dataframe(raw_df, text_column=text_column)
         processed_df = preprocess_reviews(prepared_df)
-    except Exception as exc:
-        st.error(f"Не удалось подготовить данные: {exc}")
+    except Exception:
+        st.error("Произошла ошибка при подготовке данных. Проверьте структуру файла.")
         return
 
     valid_df = processed_df[processed_df["is_valid"]].copy()
@@ -547,20 +584,18 @@ def run_analysis(text_column: str) -> None:
         return
 
     model = (
-        st.session_state.get("llm_model")
-        or os.getenv("GIGACHAT_MODEL")
+        os.getenv("GIGACHAT_MODEL")
         or os.getenv("LLM_MODEL")
         or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     )
-    provider = (st.session_state.get("llm_provider") or os.getenv("LLM_PROVIDER") or "openai").strip()
+    provider = (os.getenv("LLM_PROVIDER") or "openai").strip()
     base_url = (
-        st.session_state.get("llm_base_url")
-        or os.getenv("GIGACHAT_BASE_URL")
+        os.getenv("GIGACHAT_BASE_URL")
         or os.getenv("LLM_BASE_URL")
         or ""
     ).strip()
-    api_key = (st.session_state.get("llm_api_key") or "").strip() or None
-    batch_size = int(st.session_state.get("batch_size", 10))
+    api_key = None
+    batch_size = 10
     progress = st.progress(0)
     status = st.empty()
 
@@ -569,7 +604,7 @@ def run_analysis(text_column: str) -> None:
         status.caption(f"Проанализировано {done} из {total} отзывов")
 
     try:
-        with st.status("Выполняется аспектный анализ...", expanded=False) as analysis_status:
+        with st.status("Выполняется анализ тональности по аспектам...", expanded=False) as analysis_status:
             results_df = analyze_reviews(
                 valid_df,
                 config=AnalyzerConfig(
@@ -582,95 +617,32 @@ def run_analysis(text_column: str) -> None:
                 progress_callback=on_progress,
             )
             agg_df = aggregate_results(results_df)
+            wide_df = to_wide_format(results_df, valid_df)
             analysis_status.update(label="Анализ завершён", state="complete")
     except AnalyzerError as exc:
         st.error(str(exc))
         return
-    except Exception as exc:  # pragma: no cover - defensive UI guard
-        st.error(f"Ошибка анализа: {exc}")
+    except Exception:  # pragma: no cover
+        st.error("Анализ прерван из-за внутренней ошибки обработки. Повторите попытку.")
         return
 
     st.session_state["processed_df"] = processed_df
     st.session_state["results_df"] = results_df
     st.session_state["agg_df"] = agg_df
+    st.session_state["wide_df"] = wide_df
     progress.progress(1.0)
     st.success("Результаты готовы.")
 
 
-def render_analysis_controls(text_column: str | None) -> None:
+def render_analysis_button(text_column: str | None) -> None:
     if st.session_state.get("raw_df") is None:
         return
 
     section_header(
         "Шаг 3",
         "Запуск анализа",
-        "После запуска приложение обработает валидные отзывы и построит таблицы с дашбордом.",
+        "После запуска система обработает валидные отзывы и построит таблицы с дашбордом.",
     )
-
-    with st.expander("Расширенные настройки NLP-модуля", expanded=False):
-        st.caption(
-            "Можно использовать OpenAI, OpenAI-compatible API или GigaChat. "
-            "Если поля оставить пустыми, настройки будут взяты из `.env`."
-        )
-        current_provider = st.session_state.get(
-            "llm_provider",
-            os.getenv("LLM_PROVIDER") or ("gigachat" if os.getenv("GIGACHAT_CREDENTIALS") else "openai"),
-        )
-        st.session_state["llm_provider"] = st.selectbox(
-            "Провайдер",
-            options=["openai", "compatible", "gigachat"],
-            index=["openai", "compatible", "gigachat"].index(current_provider)
-            if current_provider in ["openai", "compatible", "gigachat"]
-            else 0,
-            format_func={
-                "openai": "OpenAI",
-                "compatible": "OpenAI-compatible",
-                "gigachat": "GigaChat",
-            }.get,
-        )
-        provider_cols = st.columns([1, 1])
-        with provider_cols[0]:
-            default_model = "GigaChat" if st.session_state["llm_provider"] == "gigachat" else "gpt-4o-mini"
-            current_model = st.session_state.get("llm_model", "")
-            if st.session_state["llm_provider"] == "gigachat" and current_model in {"", "gpt-4o-mini"}:
-                current_model = "GigaChat"
-            st.session_state["llm_model"] = st.text_input(
-                "Модель",
-                value=current_model
-                or os.getenv("GIGACHAT_MODEL")
-                or os.getenv("LLM_MODEL")
-                or os.getenv("OPENAI_MODEL")
-                or default_model,
-                help="Например: gpt-4o-mini, openai/gpt-4o-mini, deepseek-chat, GigaChat.",
-            )
-        with provider_cols[1]:
-            default_base_url = GIGACHAT_BASE_URL if st.session_state["llm_provider"] == "gigachat" else ""
-            current_base_url = st.session_state.get("llm_base_url", "")
-            if st.session_state["llm_provider"] == "gigachat" and not current_base_url:
-                current_base_url = GIGACHAT_BASE_URL
-            st.session_state["llm_base_url"] = st.text_input(
-                "Base URL API",
-                value=current_base_url
-                or os.getenv("GIGACHAT_BASE_URL")
-                or os.getenv("LLM_BASE_URL")
-                or default_base_url,
-                placeholder="Оставьте пустым для OpenAI",
-                help="Для GigaChat: https://gigachat.devices.sberbank.ru/api/v1",
-            )
-        st.session_state["llm_api_key"] = st.text_input(
-            "API-ключ / GigaChat Authorization Key",
-            value=st.session_state.get("llm_api_key", ""),
-            type="password",
-            placeholder="Можно оставить пустым, если ключ задан в .env",
-            help="Если заполнено, используется только в текущей сессии Streamlit и не экспортируется.",
-        )
-        st.session_state["batch_size"] = st.number_input(
-            "Размер батча",
-            min_value=1,
-            max_value=30,
-            value=int(st.session_state.get("batch_size", 10)),
-            step=1,
-        )
 
     disabled = text_column is None or st.session_state.get("raw_df") is None
     if st.button("Запустить анализ", type="primary", disabled=disabled, use_container_width=True):
@@ -682,22 +654,32 @@ def render_results() -> None:
     agg_df = st.session_state.get("agg_df")
     processed_df = st.session_state.get("processed_df")
     raw_df = st.session_state.get("raw_df")
+    wide_df = st.session_state.get("wide_df")
 
     if results_df is None or agg_df is None:
         return
 
+    # Build wide_df if not yet present (backwards compatibility)
+    if wide_df is None:
+        valid_df = processed_df[processed_df["is_valid"]].copy() if processed_df is not None else None
+        wide_df = to_wide_format(results_df, valid_df)
+        st.session_state["wide_df"] = wide_df
+
     section_header(
         "Итоги",
         "Результаты анализа",
-        "Сводные показатели, таблица аспектов, графики и экспорт в одном рабочем пространстве.",
+        "Сводные показатели, карточки аспектов, графики и экспорт.",
     )
+
+    # Filter out "Общее впечатление" for metrics
+    aspect_results = results_df[results_df["aspect"] != "Общее впечатление"] if "aspect" in results_df.columns else results_df
 
     invalid_count = 0
     if processed_df is not None and "is_valid" in processed_df.columns:
         invalid_count = int((~processed_df["is_valid"]).sum())
     valid_count = len(processed_df) - invalid_count if processed_df is not None else 0
-    total_mentions = len(results_df)
-    negative_share = round(float((results_df["sentiment"] == "negative").mean() * 100), 1) if total_mentions else 0.0
+    total_mentions = len(aspect_results)
+    negative_share = round(float((aspect_results["sentiment"] == "negative").mean() * 100), 1) if total_mentions else 0.0
 
     cols = st.columns(4)
     with cols[0]:
@@ -709,12 +691,12 @@ def render_results() -> None:
     with cols[3]:
         metric_card("Доля негатива", f"{negative_share}%")
 
-    sentiment_counts = results_df["sentiment_label"].fillna("Нейтральная").value_counts()
+    sentiment_counts = aspect_results["sentiment_label"].fillna("Нейтральная").value_counts() if total_mentions else pd.Series(dtype=int)
     st.markdown(
         '<div class="sentiment-strip">'
-        + sentiment_mini("Положительная", int(sentiment_counts.get("Положительная", 0)), float((results_df["sentiment"] == "positive").mean() * 100) if total_mentions else 0)
-        + sentiment_mini("Отрицательная", int(sentiment_counts.get("Отрицательная", 0)), float((results_df["sentiment"] == "negative").mean() * 100) if total_mentions else 0)
-        + sentiment_mini("Нейтральная", int(sentiment_counts.get("Нейтральная", 0)), float((results_df["sentiment"] == "neutral").mean() * 100) if total_mentions else 0)
+        + sentiment_mini("Положительная", int(sentiment_counts.get("Положительная", 0)), float((aspect_results["sentiment"] == "positive").mean() * 100) if total_mentions else 0)
+        + sentiment_mini("Отрицательная", int(sentiment_counts.get("Отрицательная", 0)), float((aspect_results["sentiment"] == "negative").mean() * 100) if total_mentions else 0)
+        + sentiment_mini("Нейтральная", int(sentiment_counts.get("Нейтральная", 0)), float((aspect_results["sentiment"] == "neutral").mean() * 100) if total_mentions else 0)
         + "</div>",
         unsafe_allow_html=True,
     )
@@ -722,7 +704,7 @@ def render_results() -> None:
     section_header("Аспекты", "Карточки аспектов", "Доли тональности считаются внутри каждого аспекта.")
     render_aspect_cards(agg_df)
 
-    section_header("Аналитика", "Процентные графики", "Графики показывают не только объём, но и структуру тональности.")
+    section_header("Аналитика", "Аналитический дашборд", "Графики показывают распределение тональности по аспектам и помогают определить проблемные зоны.")
     chart_left, chart_right = st.columns([1.55, 1])
     with chart_left:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -736,8 +718,9 @@ def render_results() -> None:
     st.plotly_chart(build_negative_rate_chart(agg_df), use_container_width=True, config={"displayModeBar": False})
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # Summary table (aggregates without confidence)
     section_header("Сводка", "Таблица аспектов", "Проценты округлены до одного знака.")
-    summary_df = agg_df.rename(
+    summary_df = agg_df[agg_df["aspect"] != "Общее впечатление"].rename(
         columns={
             "aspect": "Аспект",
             "mention_count": "Упоминаний",
@@ -747,7 +730,6 @@ def render_results() -> None:
             "positive_share": "Позитив, %",
             "negative_share": "Негатив, %",
             "neutral_share": "Нейтрально, %",
-            "confidence_avg": "Средняя уверенность",
         }
     )[
         [
@@ -756,52 +738,40 @@ def render_results() -> None:
             "Позитив, %",
             "Негатив, %",
             "Нейтрально, %",
-            "Средняя уверенность",
         ]
     ]
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-    section_header("Детализация", "Результаты по отзывам", "Используйте фильтры для проверки конкретных аспектов и тональности.")
-    filtered = results_df.copy()
-    col1, col2 = st.columns(2)
-    with col1:
-        aspects = ["Все"] + sorted(filtered["aspect"].dropna().unique().tolist())
-        selected_aspect = st.selectbox("Аспект", aspects)
-    with col2:
-        sentiments = ["Все"] + sorted(filtered["sentiment_label"].dropna().unique().tolist())
-        selected_sentiment = st.selectbox("Тональность", sentiments)
-
-    if selected_aspect != "Все":
-        filtered = filtered[filtered["aspect"] == selected_aspect]
-    if selected_sentiment != "Все":
-        filtered = filtered[filtered["sentiment_label"] == selected_sentiment]
-
-    display_df = filtered.rename(
+    # Wide-format results table
+    section_header("Детализация", "Таблица результатов анализа", "Одна строка соответствует одному отзыву. В столбцах показаны результаты анализа по аспектам.")
+    display_wide = wide_df.rename(
         columns={
             "review_id": "ID отзыва",
             "product_name": "Товар",
             "rating": "Оценка",
             "date": "Дата",
             "review_text": "Текст отзыва",
-            "aspect": "Аспект",
-            "sentiment_label": "Тональность",
-            "confidence": "Уверенность",
-            "explanation": "Пояснение",
+            "quality": "Качество товара",
+            "description_match": "Соответствие описанию",
+            "packaging": "Упаковка",
+            "delivery": "Доставка",
+            "overall_sentiment": "Общая тональность",
         }
     )
     display_columns = [
         column
-        for column in ["ID отзыва", "Товар", "Оценка", "Дата", "Текст отзыва", "Аспект", "Тональность", "Уверенность", "Пояснение"]
-        if column in display_df.columns
+        for column in ["ID отзыва", "Товар", "Оценка", "Дата", "Текст отзыва", "Качество товара", "Соответствие описанию", "Упаковка", "Доставка", "Общая тональность"]
+        if column in display_wide.columns
     ]
-    st.dataframe(display_df[display_columns], use_container_width=True, hide_index=True, height=420)
+    st.dataframe(display_wide[display_columns], use_container_width=True, hide_index=True, height=420)
 
-    section_header("Экспорт", "Выгрузка результатов", "CSV содержит итоговые строки, XLSX — исходные, обработанные, итоговые и агрегированные данные.")
+    # Export
+    section_header("Экспорт", "Выгрузка результатов", "CSV и XLSX содержат таблицу результатов в широком формате.")
     col1, col2 = st.columns(2)
     with col1:
         st.download_button(
             "Скачать результаты CSV",
-            data=to_csv_bytes(results_df),
+            data=to_csv_bytes(wide_df),
             file_name="review_analysis_results.csv",
             mime="text/csv",
             use_container_width=True,
@@ -809,7 +779,7 @@ def render_results() -> None:
     with col2:
         st.download_button(
             "Скачать полный XLSX",
-            data=to_xlsx_bytes(raw_df, processed_df, results_df, agg_df),
+            data=to_xlsx_bytes(raw_df, processed_df, wide_df, agg_df),
             file_name="review_analysis_report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
@@ -826,9 +796,9 @@ def main() -> None:
         f"""
         <section class="hero">
             <div class="hero-content">
-                <div class="eyebrow">NLP Review Analytics</div>
+                <div class="eyebrow">АНАЛИЗ ОТЗЫВОВ</div>
                 <h1>{APP_TITLE}</h1>
-                <p>Рабочее пространство для загрузки отзывов, аспектного анализа, поиска проблемных зон и выгрузки результатов.</p>
+                <p>Рабочее пространство для загрузки отзывов, анализа тональности по аспектам, просмотра аналитики и выгрузки результатов.</p>
                 <div class="hero-steps">
                     <span class="step-pill"><span class="step-index">1</span>Загрузка CSV/XLSX</span>
                     <span class="step-pill"><span class="step-index">2</span>Аспектный анализ</span>
@@ -843,7 +813,7 @@ def main() -> None:
 
     render_data_acquisition()
     text_column = render_preview()
-    render_analysis_controls(text_column)
+    render_analysis_button(text_column)
     render_results()
 
 
